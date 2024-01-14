@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
         roc_lib.addFileArg(.{ .path = val });
         roc_check.addFileArg(.{ .path = val });
     } else {
-        const default_path = "drum.roc";
+        const default_path = "main.roc";
         roc_lib.addFileArg(.{ .path = default_path });
         roc_check.addFileArg(.{ .path = default_path });
     }
