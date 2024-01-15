@@ -20,7 +20,7 @@ Roll : List Row
 
 Row : List Cell
 
-Cell : { enabled : Bool, lastClicked : U64 }
+Cell : { enabled : Bool, focused : Bool, lastClicked : U64 }
 
 main : Program
 main = { init, update }
@@ -30,7 +30,7 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
-    emptyRow = List.repeat { enabled: Bool.false, lastClicked: 0 } 16
+    emptyRow = List.repeat { enabled: Bool.false, focused: Bool.false, lastClicked: 0 } 16
 
     model = { roll: List.repeat emptyRow rows, frame: 0, mouseDown: Bool.false }
 
@@ -46,7 +46,14 @@ update = \model ->
     roll =
         when getCellIndex mouse is
             Ok index if didClick ->
-                toggleCell model.roll index
+                updateCell model.roll index \c ->
+                    { c & enabled: !c.enabled }
+
+            Ok index ->
+                model.roll
+                |> clearFocused
+                |> updateCell index \c ->
+                    { c & focused: !c.focused }
 
             _ -> model.roll
 
@@ -56,6 +63,15 @@ update = \model ->
         mouseDown: mouse.left,
     }
     |> Task.ok
+
+# This is a temp solution. Focused should be a single value on the model instead.
+clearFocused : Roll -> Roll
+clearFocused = \roll ->
+    roll
+    |> List.map \row ->
+        row
+        |> List.map \cell ->
+            { cell & focused: Bool.false }
 
 getCellIndex = \mouse ->
     yIndex =
@@ -74,11 +90,11 @@ getCellIndex = \mouse ->
         (Ok x, Ok y) -> Ok (x, y)
         _ -> Err MouseNotInCell
 
-toggleCell : Roll, (Nat, Nat) -> List Row
-toggleCell = \roll, (x, y) ->
+updateCell : Roll, (Nat, Nat), (Cell -> Cell) -> List Row
+updateCell = \roll, (x, y), f ->
     row <- List.update roll y
     cell <- List.update row x
-    { cell & enabled: !cell.enabled }
+    f cell
 
 # Parameters
 offset = 45
@@ -111,7 +127,7 @@ drawRow = \row, y ->
 
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
-    if cell.enabled then
+    if cell.enabled || cell.focused then
         {} <- W4.setShapeColors { border: Color2, fill: Color3 } |> Task.await
         {} <- W4.rect { x, y, width: 10, height: 10 } |> Task.await
         W4.setShapeColors { border: Color2, fill: Color1 }
