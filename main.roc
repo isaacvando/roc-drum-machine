@@ -4,7 +4,7 @@ app "main"
     }
     imports [
         w4.Task.{ Task },
-        w4.W4,
+        w4.W4.{ Palette },
     ]
     provides [main, Model] to w4
 
@@ -13,14 +13,22 @@ Program : {
     update : Model -> Task Model [],
 }
 
-Model : { roll : Roll, frame : U64, mouseDown : Bool }
+Model : {
+    roll : Roll,
+    frame : U64,
+    mouseDown : Bool,
+}
 
 # As in piano roll
 Roll : List Row
 
 Row : List Cell
 
-Cell : { enabled : Bool, focused : Bool, lastClicked : U64 }
+Cell : {
+    enabled : Bool,
+    focused : Bool,
+    lastClicked : U64,
+}
 
 main : Program
 main = { init, update }
@@ -30,9 +38,19 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
-    emptyRow = List.repeat { enabled: Bool.false, focused: Bool.false, lastClicked: 0 } 16
+    emptyRow = List.repeat
+        {
+            enabled: Bool.false,
+            focused: Bool.false,
+            lastClicked: 0,
+        }
+        16
 
-    model = { roll: List.repeat emptyRow rows, frame: 0, mouseDown: Bool.false }
+    model = {
+        roll: List.repeat emptyRow rows,
+        frame: 0,
+        mouseDown: Bool.false,
+    }
 
     Task.ok model
 
@@ -64,7 +82,7 @@ update = \model ->
     }
     |> Task.ok
 
-# This is a temp solution. Focused should be a single value on the model instead.
+# This is a temporary solution. Focused should be a single value on the model instead.
 clearFocused : Roll -> Roll
 clearFocused = \roll ->
     roll
@@ -105,11 +123,25 @@ rows = 4
 # Drawing
 draw : Model -> Task {} []
 draw = \model ->
+    {} <- drawRoll model.roll |> Task.await
+    drawIndicator model
+
+drawIndicator : Model -> Task {} []
+drawIndicator = \model ->
+    # Assuming we maintain 60 FPS, this means 120 BPM
+    index = (model.frame // 30) % 16
+    x = index * 10 |> Num.toI32
+    y = offset + rows * space - 5
+    drawShape = W4.oval { height: 8, width: 8, x, y }
+    drawShapeWithColors drawShape { border: Color4, fill: Color4 }
+
+drawRoll : Roll -> Task {} []
+drawRoll = \roll ->
     Task.loop 0 \n ->
         if n == rows then
             Done {} |> Task.ok
         else
-            row = List.get model.roll n |> unwrap
+            row = List.get roll n |> unwrap
             y = offset + n * space |> Num.toI32
             {} <- drawRow row y |> Task.await
             Step (n + 1) |> Task.ok
@@ -128,11 +160,16 @@ drawRow = \row, y ->
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
     if cell.enabled || cell.focused then
-        {} <- W4.setShapeColors { border: Color2, fill: Color3 } |> Task.await
-        {} <- W4.rect { x, y, width: 10, height: 10 } |> Task.await
-        W4.setShapeColors { border: Color2, fill: Color1 }
+        drawShape = W4.rect { x, y, width: 10, height: 10 }
+        drawShapeWithColors drawShape { border: Color2, fill: Color3 }
     else
         W4.rect { x, y, width: 10, height: 10 }
+
+drawShapeWithColors : Task {} [], { border : Palette, fill : Palette } -> Task {} []
+drawShapeWithColors = \drawShape, borderAndFill ->
+    {} <- W4.setShapeColors borderAndFill |> Task.await
+    {} <- drawShape |> Task.await
+    W4.setShapeColors { border: Color2, fill: Color1 }
 
 colors = {
     # black
