@@ -13,9 +13,14 @@ Program : {
     update : Model -> Task Model [],
 }
 
-Model : List Row
+Model : { roll : Roll, frame : U64 }
 
-Row : List [On, Off]
+# As in piano roll
+Roll : List Row
+
+Row : List Cell
+
+Cell : { state : [On, Off], lastClicked : U64 }
 
 main : Program
 main = { init, update }
@@ -25,23 +30,28 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
-    model = List.repeat emptyRow rows
+    model = { roll: List.repeat emptyRow rows, frame: 0 }
 
     Task.ok model
 
 emptyRow : Row
-emptyRow = List.repeat Off 16
+emptyRow = List.repeat { state: Off, lastClicked: 0 } 16
 
 update : Model -> Task Model []
 update = \model ->
-    {} <- drawBoard model |> Task.await
     mouse <- W4.getMouse |> Task.await
+    {} <- draw model |> Task.await
+    {} <- W4.text (Inspect.toStr model.frame) { x: 0, y: 0 } |> Task.await
 
-    when getCellIndex mouse is
-        Err _ -> Task.ok model
-        Ok index ->
-            {} <- W4.text (Inspect.toStr index) { x: 0, y: 0 } |> Task.await
-            toggleCell model index |> Task.ok
+    roll =
+        when getCellIndex mouse is
+            Ok index if mouse.left ->
+                toggleCell model.roll index
+
+            _ -> model.roll
+
+    { roll, frame: Num.addWrap model.frame 1 }
+    |> Task.ok
 
 getCellIndex = \mouse ->
     yIndex =
@@ -60,28 +70,23 @@ getCellIndex = \mouse ->
         (Ok x, Ok y) -> Ok (x, y)
         _ -> Err MouseNotInCell
 
-toggleCell : Model, (Nat, Nat) -> Model
-toggleCell = \model, (x, y) ->
-    row <- List.update model y
+toggleCell : Roll, (Nat, Nat) -> List Row
+toggleCell = \roll, (x, y) ->
+    row <- List.update roll y
     cell <- List.update row x
-    when cell is
-        On -> Off
-        Off -> On
+    when cell.state is
+        On -> { cell & state: Off }
+        Off -> { cell & state: On }
 
-expect
-    model = [[On, On], [On, On]]
-    updated = toggleCell model (1, 1)
-    updated == [[On, On], [On, Off]]
-
-drawBoard : Model -> Task {} []
-drawBoard = \model ->
+draw : Model -> Task {} []
+draw = \model ->
     Task.loop 0 \n ->
         if
             n == rows
         then
             Done {} |> Task.ok
         else
-            row = List.get model n |> unwrap
+            row = List.get model.roll n |> unwrap
             y = offset + n * space |> Num.toI32
             {} <- drawRow row y |> Task.await
             Step (n + 1) |> Task.ok
@@ -104,21 +109,25 @@ drawRow = \row, y ->
             {} <- drawCell cellState x y |> Task.await
             Step (n + 1) |> Task.ok
 
-drawCell : [On, Off], I32, I32 -> Task {} []
-drawCell = \state, x, y ->
-    when state is
+drawCell : Cell, I32, I32 -> Task {} []
+drawCell = \cell, x, y ->
+    when cell.state is
         On ->
-            {} <- W4.setShapeColors { border: Color2, fill: Color2 } |> Task.await
+            {} <- W4.setShapeColors { border: Color2, fill: Color3 } |> Task.await
             {} <- W4.rect { x, y, width: 10, height: 10 } |> Task.await
-            W4.setShapeColors { border: Color1, fill: Color2 }
+            W4.setShapeColors { border: Color2, fill: Color1 }
 
         Off -> W4.rect { x, y, width: 10, height: 10 }
 
 colors = {
+    # black
     color1: 0x000000,
+    # blue
     color2: 0x027ed6,
-    color3: 0x000ff00,
-    color4: 0x0000ff,
+    # grey
+    color3: 0x4a4a4a,
+    # red
+    color4: 0xe30505,
 }
 
 drawColors = {
