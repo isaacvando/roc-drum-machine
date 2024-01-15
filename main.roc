@@ -20,7 +20,7 @@ Roll : List Row
 
 Row : List Cell
 
-Cell : { state : [On, Off], lastClicked : U64 }
+Cell : { enabled : Bool, lastClicked : U64 }
 
 main : Program
 main = { init, update }
@@ -30,12 +30,11 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
+    emptyRow = List.repeat { enabled: Bool.false, lastClicked: 0 } 16
+
     model = { roll: List.repeat emptyRow rows, frame: 0, mouseDown: Bool.false }
 
     Task.ok model
-
-emptyRow : Row
-emptyRow = List.repeat { state: Off, lastClicked: 0 } 16
 
 update : Model -> Task Model []
 update = \model ->
@@ -51,7 +50,11 @@ update = \model ->
 
             _ -> model.roll
 
-    { roll, frame: Num.addWrap model.frame 1, mouseDown: mouse.left }
+    {
+        roll,
+        frame: Num.addWrap model.frame 1,
+        mouseDown: mouse.left,
+    }
     |> Task.ok
 
 getCellIndex = \mouse ->
@@ -75,16 +78,19 @@ toggleCell : Roll, (Nat, Nat) -> List Row
 toggleCell = \roll, (x, y) ->
     row <- List.update roll y
     cell <- List.update row x
-    when cell.state is
-        On -> { cell & state: Off }
-        Off -> { cell & state: On }
+    { cell & enabled: !cell.enabled }
 
+# Parameters
+offset = 45
+space = 20
+cellLength = 10
+rows = 4
+
+# Drawing
 draw : Model -> Task {} []
 draw = \model ->
     Task.loop 0 \n ->
-        if
-            n == rows
-        then
+        if n == rows then
             Done {} |> Task.ok
         else
             row = List.get model.roll n |> unwrap
@@ -92,17 +98,10 @@ draw = \model ->
             {} <- drawRow row y |> Task.await
             Step (n + 1) |> Task.ok
 
-offset = 45
-space = 20
-cellLength = 10
-rows = 4
-
 drawRow : Row, I32 -> Task {} []
 drawRow = \row, y ->
     Task.loop 0 \n ->
-        if
-            n == 16
-        then
+        if n == 16 then
             Done {} |> Task.ok
         else
             cellState = List.get row n |> unwrap
@@ -112,13 +111,12 @@ drawRow = \row, y ->
 
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
-    when cell.state is
-        On ->
-            {} <- W4.setShapeColors { border: Color2, fill: Color3 } |> Task.await
-            {} <- W4.rect { x, y, width: 10, height: 10 } |> Task.await
-            W4.setShapeColors { border: Color2, fill: Color1 }
-
-        Off -> W4.rect { x, y, width: 10, height: 10 }
+    if cell.enabled then
+        {} <- W4.setShapeColors { border: Color2, fill: Color3 } |> Task.await
+        {} <- W4.rect { x, y, width: 10, height: 10 } |> Task.await
+        W4.setShapeColors { border: Color2, fill: Color1 }
+    else
+        W4.rect { x, y, width: 10, height: 10 }
 
 colors = {
     # black
@@ -138,6 +136,7 @@ drawColors = {
     quaternary: Color4,
 }
 
+# Utils
 unwrap = \x ->
     when x is
         Ok val -> val
