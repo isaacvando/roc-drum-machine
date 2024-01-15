@@ -13,7 +13,7 @@ Program : {
     update : Model -> Task Model [],
 }
 
-Model : { roll : Roll, frame : U64 }
+Model : { roll : Roll, frame : U64, mouseDown : Bool }
 
 # As in piano roll
 Roll : List Row
@@ -30,7 +30,7 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
-    model = { roll: List.repeat emptyRow rows, frame: 0 }
+    model = { roll: List.repeat emptyRow rows, frame: 0, mouseDown: Bool.false }
 
     Task.ok model
 
@@ -41,16 +41,17 @@ update : Model -> Task Model []
 update = \model ->
     mouse <- W4.getMouse |> Task.await
     {} <- draw model |> Task.await
-    {} <- W4.text (Inspect.toStr model.frame) { x: 0, y: 0 } |> Task.await
 
+    # When the mouse is released we register a click and update the roll
+    didClick = !mouse.left && model.mouseDown
     roll =
         when getCellIndex mouse is
-            Ok index if mouse.left ->
+            Ok index if didClick ->
                 toggleCell model.roll index
 
             _ -> model.roll
 
-    { roll, frame: Num.addWrap model.frame 1 }
+    { roll, frame: Num.addWrap model.frame 1, mouseDown: mouse.left }
     |> Task.ok
 
 getCellIndex = \mouse ->
