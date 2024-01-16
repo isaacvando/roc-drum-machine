@@ -16,7 +16,7 @@ Program : {
 Model : {
     roll : Roll,
     frame : U64,
-    currentBeat : U8,
+    currentBeat : I32,
     mouseDown : Bool,
 }
 
@@ -77,25 +77,27 @@ update = \model ->
 
             _ -> model.roll
 
-    # Assuming we maintain 60 FPS, this means 120 BPM
-    currentBeat = (model.frame // 30) % 16 |> Num.toU8
-    {} <- playSounds model currentBeat |> Task.await
+    currentBeat = (model.frame // 8) % 16
+
+    {} <- W4.text (Inspect.toStr currentBeat) { x: 0, y: 0 } |> Task.await
+
+    {} <- playSounds model (Num.toI32 currentBeat) |> Task.await
 
     {
         roll,
         frame: Num.addWrap model.frame 1,
-        currentBeat,
+        currentBeat: currentBeat |> Num.toI32,
         mouseDown: mouse.left,
     }
     |> Task.ok
 
-getCurrentColumn : Model, U8 -> List Cell
+getCurrentColumn : Model, I32 -> List Cell
 getCurrentColumn = \model, index ->
     model.roll
     |> List.map \row ->
         List.get row (Num.toNat index) |> unwrap
 
-playSounds : Model, U8 -> Task {} []
+playSounds : Model, I32 -> Task {} []
 playSounds = \model, currentBeat ->
     if currentBeat != model.currentBeat then
         getCurrentColumn model currentBeat
@@ -105,10 +107,12 @@ playSounds = \model, currentBeat ->
 
 playColumn : List Cell -> Task {} []
 playColumn = \column ->
-    Task.loop column \state ->
+    List.map2 [snare, snare, kick, kick] column \x, y ->
+        (x, y)
+    |> Task.loop \state ->
         when state is
-            [first, .. as rest] ->
-                task = if first.enabled then kick else Task.ok {}
+            [(sound, cell), .. as rest] ->
+                task = if cell.enabled then sound else Task.ok {}
                 {} <- task |> Task.await
                 Task.ok (Step rest)
 
@@ -161,6 +165,19 @@ kick = W4.tone {
     channel: Triangle,
 }
 
+snare : Task {} []
+snare = W4.tone {
+    startFreq: 400,
+    endFreq: 0,
+    attackTime: 0,
+    decayTime: 10,
+    sustainTime: 8,
+    releaseTime: 0,
+    peakVolume: 100,
+    volume: 100,
+    channel: Noise,
+}
+
 # Parameters
 offset = 45
 space = 20
@@ -176,8 +193,7 @@ draw = \model ->
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
     # Assuming we maintain 60 FPS, this means 120 BPM
-    index = (model.frame // 30) % 16
-    x = index * 10 |> Num.toI32
+    x = model.currentBeat * 10
     y = offset + rows * space - 5
     drawShape = W4.oval { height: 8, width: 8, x, y }
     drawShapeWithColors drawShape { border: Color4, fill: Color4 }
