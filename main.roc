@@ -16,6 +16,7 @@ Program : {
 Model : {
     roll : Roll,
     frame : U64,
+    currentBeat : U8,
     mouseDown : Bool,
 }
 
@@ -49,6 +50,7 @@ init =
     model = {
         roll: List.repeat emptyRow rows,
         frame: 0,
+        currentBeat: 0,
         mouseDown: Bool.false,
     }
 
@@ -75,12 +77,42 @@ update = \model ->
 
             _ -> model.roll
 
+    # Assuming we maintain 60 FPS, this means 120 BPM
+    currentBeat = (model.frame // 30) % 16 |> Num.toU8
+    {} <- playSounds model currentBeat |> Task.await
+
     {
         roll,
         frame: Num.addWrap model.frame 1,
+        currentBeat,
         mouseDown: mouse.left,
     }
     |> Task.ok
+
+getCurrentColumn : Model, U8 -> List Cell
+getCurrentColumn = \model, index ->
+    model.roll
+    |> List.map \row ->
+        List.get row (Num.toNat index) |> unwrap
+
+playSounds : Model, U8 -> Task {} []
+playSounds = \model, currentBeat ->
+    if currentBeat != model.currentBeat then
+        getCurrentColumn model currentBeat
+        |> playColumn
+    else
+        Task.ok {}
+
+playColumn : List Cell -> Task {} []
+playColumn = \column ->
+    Task.loop column \state ->
+        when state is
+            [first, .. as rest] ->
+                task = if first.enabled then kick else Task.ok {}
+                {} <- task |> Task.await
+                Task.ok (Step rest)
+
+            [] -> Task.ok (Done {})
 
 # This is a temporary solution. Focused should be a single value on the model instead.
 clearFocused : Roll -> Roll
@@ -113,6 +145,21 @@ updateCell = \roll, (x, y), f ->
     row <- List.update roll y
     cell <- List.update row x
     f cell
+
+# Sounds
+
+kick : Task {} []
+kick = W4.tone {
+    startFreq: 190,
+    endFreq: 40,
+    attackTime: 0,
+    decayTime: 4,
+    sustainTime: 4,
+    releaseTime: 4,
+    peakVolume: 100,
+    volume: 100,
+    channel: Triangle,
+}
 
 # Parameters
 offset = 45
