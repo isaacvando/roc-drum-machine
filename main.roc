@@ -5,6 +5,7 @@ app "main"
     imports [
         w4.Task.{ Task },
         w4.W4.{ Palette },
+        # w4.Sprite.{ Sprite },
     ]
     provides [main, Model] to w4
 
@@ -63,6 +64,10 @@ update = \model ->
 
     # When the mouse is released we register a click and update the roll
     didClick = !mouse.left && model.mouseDown
+    i = getCellIndex mouse
+
+    {} <- W4.text (Inspect.toStr i) { x: 0, y: 0 } |> Task.await
+
     roll =
         when getCellIndex mouse is
             Ok index if didClick ->
@@ -77,16 +82,17 @@ update = \model ->
 
             _ -> model.roll
 
-    currentBeat = (model.frame // 8) % 16
+    currentBeat =
+        (model.frame // 8)
+        % 16
+        |> Num.toI32
 
-    {} <- W4.text (Inspect.toStr currentBeat) { x: 0, y: 0 } |> Task.await
-
-    {} <- playSounds model (Num.toI32 currentBeat) |> Task.await
+    {} <- playSounds model currentBeat |> Task.await
 
     {
         roll,
         frame: Num.addWrap model.frame 1,
-        currentBeat: currentBeat |> Num.toI32,
+        currentBeat,
         mouseDown: mouse.left,
     }
     |> Task.ok
@@ -107,7 +113,7 @@ playSounds = \model, currentBeat ->
 
 playColumn : List Cell -> Task {} []
 playColumn = \column ->
-    List.map2 [snare, snare, kick, kick] column \x, y ->
+    List.map2 sounds column \x, y ->
         (x, y)
     |> Task.loop \state ->
         when state is
@@ -129,7 +135,7 @@ clearFocused = \roll ->
 
 getCellIndex = \mouse ->
     yIndex =
-        List.range { start: At 0, end: At 3 }
+        List.range { start: At 0, end: At (rows - 1) }
         |> List.findFirstIndex \n ->
             start = offset + n * space
             mouse.y >= start && mouse.y < start + cellLength
@@ -151,6 +157,7 @@ updateCell = \roll, (x, y), f ->
     f cell
 
 # Sounds
+sounds = [highTom, lowTom, hihat, snare, kick]
 
 kick : Task {} []
 kick = W4.tone {
@@ -173,16 +180,55 @@ snare = W4.tone {
     decayTime: 10,
     sustainTime: 8,
     releaseTime: 0,
-    peakVolume: 100,
-    volume: 100,
+    peakVolume: 60,
+    volume: 60,
     channel: Noise,
 }
 
+hihat : Task {} []
+hihat = W4.tone {
+    startFreq: 680,
+    endFreq: 675,
+    attackTime: 0,
+    decayTime: 6,
+    sustainTime: 1,
+    releaseTime: 0,
+    peakVolume: 60,
+    volume: 60,
+    channel: Pulse1 Eighth,
+}
+
+lowTom : Task {} []
+lowTom = W4.tone {
+    startFreq: 400,
+    endFreq: 200,
+    attackTime: 2,
+    decayTime: 22,
+    sustainTime: 14,
+    releaseTime: 8,
+    peakVolume: 68,
+    volume: 58,
+    channel: Pulse2 Eighth,
+}
+
+highTom : Task {} []
+highTom = W4.tone {
+    startFreq: 600,
+    endFreq: 400,
+    attackTime: 2,
+    decayTime: 22,
+    sustainTime: 14,
+    releaseTime: 8,
+    peakVolume: 68,
+    volume: 58,
+    channel: Pulse2 Eighth,
+}
+
 # Parameters
-offset = 45
-space = 20
+offset = 55
+space = 10
 cellLength = 10
-rows = 4
+rows = 5
 
 # Drawing
 draw : Model -> Task {} []
@@ -193,9 +239,9 @@ draw = \model ->
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
     # Assuming we maintain 60 FPS, this means 120 BPM
-    x = model.currentBeat * 10
-    y = offset + rows * space - 5
-    drawShape = W4.oval { height: 8, width: 8, x, y }
+    x = model.currentBeat * cellLength
+    y = offset + rows * space
+    drawShape = W4.oval { height: cellLength, width: cellLength, x, y }
     drawShapeWithColors drawShape { border: Color4, fill: Color4 }
 
 drawRoll : Roll -> Task {} []
@@ -216,17 +262,17 @@ drawRow = \row, y ->
             Done {} |> Task.ok
         else
             cellState = List.get row n |> unwrap
-            x = 10 * n |> Num.toI32
+            x = cellLength * n |> Num.toI32
             {} <- drawCell cellState x y |> Task.await
             Step (n + 1) |> Task.ok
 
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
     if cell.enabled || cell.focused then
-        drawShape = W4.rect { x, y, width: 10, height: 10 }
+        drawShape = W4.rect { x, y, width: cellLength, height: cellLength }
         drawShapeWithColors drawShape { border: Color2, fill: Color3 }
     else
-        W4.rect { x, y, width: 10, height: 10 }
+        W4.rect { x, y, width: cellLength, height: cellLength }
 
 drawShapeWithColors : Task {} [], { border : Palette, fill : Palette } -> Task {} []
 drawShapeWithColors = \drawShape, borderAndFill ->
