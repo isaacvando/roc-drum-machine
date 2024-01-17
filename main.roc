@@ -64,9 +64,6 @@ update = \model ->
 
     # When the mouse is released we register a click and update the roll
     didClick = !mouse.left && model.mouseDown
-    i = getCellIndex mouse
-
-    {} <- W4.text (Inspect.toStr i) { x: 0, y: 0 } |> Task.await
 
     roll =
         when getCellIndex mouse is
@@ -177,11 +174,11 @@ snare = W4.tone {
     startFreq: 400,
     endFreq: 0,
     attackTime: 0,
-    decayTime: 10,
+    decayTime: 6,
     sustainTime: 8,
     releaseTime: 0,
-    peakVolume: 60,
-    volume: 60,
+    peakVolume: 45,
+    volume: 45,
     channel: Noise,
 }
 
@@ -234,7 +231,18 @@ rows = 5
 draw : Model -> Task {} []
 draw = \model ->
     {} <- drawRoll model.roll |> Task.await
+    {} <- drawBarMarkers |> Task.await
     drawIndicator model
+
+drawBarMarkers =
+    Task.loop 0 \bar ->
+        if bar == 4 then
+            Done {} |> Task.ok
+        else
+            x = bar * cellLength * 4
+            shape = W4.vline { x, y: offset - 2, len: 2 }
+            {} <- drawShapeWithColors shape { border: Color4, fill: Color4 } |> Task.await
+            Step (bar + 1) |> Task.ok
 
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
