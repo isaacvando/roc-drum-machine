@@ -19,6 +19,7 @@ Model : {
     frame : U64,
     currentBeat : I32,
     mouseDown : Bool,
+    speedCoefficient : Dec,
 }
 
 # As in piano roll
@@ -53,6 +54,7 @@ init =
         frame: 0,
         currentBeat: 0,
         mouseDown: Bool.false,
+        speedCoefficient: 8.0,
     }
 
     Task.ok model
@@ -86,11 +88,24 @@ update = \model ->
 
     {} <- playSounds model currentBeat |> Task.await
 
+    gamepad <- W4.getGamepad Player1 |> Task.await
+    {} <- W4.text (Inspect.toStr (gamepad.left, gamepad.right)) { x: 0, y: 0 } |> Task.await
+
+    # speedCoefficient =
+    #     changeAmount = 0.25
+    #     if gamepad.left then
+    #         model.speedCoefficient - changeAmount
+    #     else if gamepad.right then
+    #         model.speedCoefficient + changeAmount
+    #     else
+    #         model.speedCoefficient
+
     {
         roll,
         frame: Num.addWrap model.frame 1,
         currentBeat,
         mouseDown: mouse.left,
+        speedCoefficient: 8.0,
     }
     |> Task.ok
 
@@ -152,80 +167,6 @@ updateCell = \roll, (x, y), f ->
     row <- List.update roll y
     cell <- List.update row x
     f cell
-
-# Sounds
-sounds = [highTom, lowTom, hihat, snare, kick]
-
-kick : Task {} []
-kick = W4.tone {
-    startFreq: 190,
-    endFreq: 40,
-    attackTime: 0,
-    decayTime: 4,
-    sustainTime: 4,
-    releaseTime: 4,
-    peakVolume: 100,
-    volume: 100,
-    channel: Triangle,
-}
-
-snare : Task {} []
-snare = W4.tone {
-    startFreq: 400,
-    endFreq: 0,
-    attackTime: 0,
-    decayTime: 6,
-    sustainTime: 8,
-    releaseTime: 0,
-    peakVolume: 45,
-    volume: 45,
-    channel: Noise,
-}
-
-hihat : Task {} []
-hihat = W4.tone {
-    startFreq: 680,
-    endFreq: 675,
-    attackTime: 0,
-    decayTime: 6,
-    sustainTime: 1,
-    releaseTime: 0,
-    peakVolume: 60,
-    volume: 60,
-    channel: Pulse1 Eighth,
-}
-
-lowTom : Task {} []
-lowTom = W4.tone {
-    startFreq: 400,
-    endFreq: 200,
-    attackTime: 2,
-    decayTime: 22,
-    sustainTime: 14,
-    releaseTime: 8,
-    peakVolume: 68,
-    volume: 58,
-    channel: Pulse2 Eighth,
-}
-
-highTom : Task {} []
-highTom = W4.tone {
-    startFreq: 600,
-    endFreq: 400,
-    attackTime: 2,
-    decayTime: 22,
-    sustainTime: 14,
-    releaseTime: 8,
-    peakVolume: 68,
-    volume: 58,
-    channel: Pulse2 Eighth,
-}
-
-# Parameters
-offset = 55
-space = 10
-cellLength = 10
-rows = 5
 
 # Drawing
 draw : Model -> Task {} []
@@ -305,6 +246,80 @@ drawColors = {
     tertiary: Color3,
     quaternary: Color4,
 }
+
+# Sounds
+sounds = [highTom, lowTom, hihat, snare, kick]
+
+kick : Task {} []
+kick = W4.tone {
+    startFreq: 190,
+    endFreq: 40,
+    attackTime: 0,
+    decayTime: 4,
+    sustainTime: 4,
+    releaseTime: 4,
+    peakVolume: 100,
+    volume: 100,
+    channel: Triangle,
+}
+
+snare : Task {} []
+snare = W4.tone {
+    startFreq: 400,
+    endFreq: 0,
+    attackTime: 0,
+    decayTime: 6,
+    sustainTime: 8,
+    releaseTime: 0,
+    peakVolume: 45,
+    volume: 45,
+    channel: Noise,
+}
+
+hihat : Task {} []
+hihat = W4.tone {
+    startFreq: 680,
+    endFreq: 675,
+    attackTime: 0,
+    decayTime: 6,
+    sustainTime: 1,
+    releaseTime: 0,
+    peakVolume: 60,
+    volume: 60,
+    channel: Pulse1 Eighth,
+}
+
+lowTom : Task {} []
+lowTom = W4.tone {
+    startFreq: 400,
+    endFreq: 200,
+    attackTime: 2,
+    decayTime: 22,
+    sustainTime: 14,
+    releaseTime: 8,
+    peakVolume: 68,
+    volume: 58,
+    channel: Pulse2 Eighth,
+}
+
+highTom : Task {} []
+highTom = W4.tone {
+    startFreq: 600,
+    endFreq: 400,
+    attackTime: 2,
+    decayTime: 22,
+    sustainTime: 14,
+    releaseTime: 8,
+    peakVolume: 68,
+    volume: 58,
+    channel: Pulse2 Eighth,
+}
+
+# Parameters
+offset = 55
+space = 10
+cellLength = 10
+rows = 5
 
 # Utils
 unwrap = \x ->
