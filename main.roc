@@ -19,7 +19,7 @@ Model : {
     frame : U64,
     currentBeat : I32,
     mouseDown : Bool,
-    speedCoefficient : Dec,
+    speedCoefficient : F64,
 }
 
 # As in piano roll
@@ -82,30 +82,36 @@ update = \model ->
             _ -> model.roll
 
     currentBeat =
-        (model.frame // 8)
-        % 16
+        model.frame
+        |> Num.toF64
+        |> Num.div (Num.max model.speedCoefficient 1)
+        |> Num.round
+        |> Num.rem 16
         |> Num.toI32
 
     {} <- playSounds model currentBeat |> Task.await
 
     gamepad <- W4.getGamepad Player1 |> Task.await
-    {} <- W4.text (Inspect.toStr (gamepad.left, gamepad.right)) { x: 0, y: 0 } |> Task.await
+    # {} <- W4.text (Inspect.toStr (Num.round model.speedCoefficient)) { x: 0, y: 0 } |> Task.await
 
-    # speedCoefficient =
-    #     changeAmount = 0.25
-    #     if gamepad.left then
-    #         model.speedCoefficient - changeAmount
-    #     else if gamepad.right then
-    #         model.speedCoefficient + changeAmount
-    #     else
-    #         model.speedCoefficient
+    speedCoefficient =
+        changeBy = 0.25
+        val =
+            if gamepad.left then
+                model.speedCoefficient + changeBy
+            else if gamepad.right then
+                model.speedCoefficient - changeBy
+            else
+                model.speedCoefficient
+
+        Num.max val 1
 
     {
         roll,
         frame: Num.addWrap model.frame 1,
         currentBeat,
         mouseDown: mouse.left,
-        speedCoefficient: 8.0,
+        speedCoefficient,
     }
     |> Task.ok
 
