@@ -86,10 +86,9 @@ update = \model ->
     
     gamepad <- W4.getGamepad Player1 |> Task.await
 
-    # Approximate BPM
-    bpm = 900 // model.interval
+    bpm = Num.toF32 (900.0 / (Num.toF32 model.interval))
 
-    {} <- drawText"$(Num.toStr bpm) BPM" |> Task.await
+    {} <- drawText"$(floatToStr bpm) BPM" |> Task.await
 
     interval =
         if model.frame % 10 == 0 then
@@ -130,10 +129,20 @@ update = \model ->
     }
     |> Task.ok
 
+floatToStr : F32 -> Str
+floatToStr = \f -> 
+    intPart = Num.floor f
+    decPart = Num.floor (f * 100) - (intPart * 100)
+    decStr = Num.toStr decPart
+    if List.len (Str.toUtf8 decStr) == 1 then 
+        "$(Num.toStr intPart).$(decStr)0"
+    else
+        "$(Num.toStr intPart).$(decStr)"
+
 drawText : Str -> Task {} []
 drawText = \str ->
     {} <- W4.setTextColors { fg: Color2, bg: Color1 } |> Task.await
-    {} <- W4.text str { x: 55, y: 10 } |> Task.await
+    {} <- W4.text str { x: 45, y: 10 } |> Task.await
     W4.setTextColors { fg: Color1, bg: Color2 }
 
 getCurrentColumn : Model, I32 -> List Cell
