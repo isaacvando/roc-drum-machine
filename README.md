@@ -1,4 +1,17 @@
-# roc-drum-machine
+# roc-drum-machine :drum:
 
-Drum machine built using the [roc-wasm4](https://github.com/lukewilliamboswell/roc-wasm4) platform. roc-wasm4 [license](https://github.com/lukewilliamboswell/roc-wasm4?tab=UPL-1.0-1-ov-file).
+A simple drum machine built with [Roc](https://roc-lang.orc) using the [roc-wasm4](https://github.com/lukewilliamboswell/roc-wasm4) platform.
 
+To run locally, follow the instructions in [roc-wasm4](https://github.com/lukewilliamboswell/roc-wasm4), then run 
+```bash
+zig build run
+```
+
+The instruments are (from top to bottom):
+1. High tom
+1. Low tom
+1. HiHat
+1. Snare
+1. Kick
+
+Use the left and right arrow keys to adjust the tempo.
