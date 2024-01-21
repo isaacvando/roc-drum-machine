@@ -4,10 +4,12 @@ app "main"
     }
     imports [
         w4.Task.{ Task },
-        w4.W4.{ Palette },
+        w4.W4.{ Palette, Gamepad, Mouse },
     ]
     provides [main, Model] to w4
 
+
+# Aliases
 Program : {
     init : Task Model [],
     update : Model -> Task Model [],
@@ -40,11 +42,10 @@ main = { init, update }
 init : Task Model []
 init =
     {} <- W4.setPalette colors |> Task.await
-    {} <- W4.setDrawColors drawColors |> Task.await
 
     emptyRow = List.repeat { enabled: Bool.false, } 16
 
-    model = {
+    Task.ok {
         roll: List.repeat emptyRow rows,
         focused: Err MouseNotInCell,
         frame: 0,
@@ -56,39 +57,34 @@ init =
         interval: 8,
     }
 
-    Task.ok model
-
 update : Model -> Task Model []
 update = \model ->
     # Get input
     mouse <- W4.getMouse |> Task.await
     gamepad <- W4.getGamepad Player1 |> Task.await
 
+    # Get new model
+    newModel = step model mouse gamepad
 
-    # Compute new model
-    # When the mouse is released we register a click and update the roll
-    didClick = !mouse.left && model.mouseDown
+    # Update game
+    {} <- playSounds model newModel.currentBeat |> Task.await
+    {} <- draw model |> Task.await
 
+    Task.ok newModel
+
+
+step : Model, Mouse, Gamepad -> Model
+step = \model, mouse, gamepad -> 
     currentIndex = getCellIndex mouse
+
     roll =
         when currentIndex is
-            Ok index if didClick ->
+            # When the mouse is in a cell, and it was just released, toggle the cell
+            Ok index if !mouse.left && model.mouseDown ->
                 updateCell model.roll index \c ->
                     { c & enabled: !c.enabled }
 
             _ -> model.roll
-
-    
-
-    # The screen is updated at 60hz. We use the frame count and the fact that it is 60hz to determine the tempo.
-    # Because we only have 60 calls to update per second, we are limited in the number of different tempos possible.
-    # 60hz = 60bps = 3600bpm
-    # For each beat (quarter note) we have 4 sixteenth notes, each of which require a distinct update. 
-    # The interval is the number of updates between each sixteenth note.
-    # 3600 / 4 = 900, so to compute the current bpm, we do the following:
-    bpm = Num.toF32 (900.0 / (Num.toF32 model.interval))
-
-    {} <- drawText"$(floatToStr bpm) BPM" |> Task.await
 
     interval =
             if model.leftDown && model.rightDown then
@@ -116,11 +112,6 @@ update = \model ->
         else 
             model.currentBeat
 
-    # Update game
-    {} <- playSounds model currentBeat |> Task.await
-    {} <- draw model |> Task.await
-
-    # Return new model
     {
         roll,
         focused: currentIndex,
@@ -132,23 +123,6 @@ update = \model ->
         leftDown: gamepad.left,
         rightDown: gamepad.right
     }
-    |> Task.ok
-
-floatToStr : F32 -> Str
-floatToStr = \f -> 
-    intPart = Num.floor f
-    decPart = Num.floor (f * 100) - (intPart * 100)
-    decStr = Num.toStr decPart
-    if List.len (Str.toUtf8 decStr) == 1 then 
-        "$(Num.toStr intPart).$(decStr)0"
-    else
-        "$(Num.toStr intPart).$(decStr)"
-
-drawText : Str -> Task {} []
-drawText = \str ->
-    {} <- W4.setTextColors { fg: Color2, bg: Color1 } |> Task.await
-    {} <- W4.text str { x: 45, y: 10 } |> Task.await
-    W4.setTextColors { fg: Color1, bg: Color2 }
 
 getCurrentColumn : Model, I32 -> List Cell
 getCurrentColumn = \model, index ->
@@ -156,27 +130,7 @@ getCurrentColumn = \model, index ->
     |> List.map \row ->
         List.get row (Num.toNat index) |> unwrap
 
-playSounds : Model, I32 -> Task {} []
-playSounds = \model, currentBeat ->
-    if currentBeat != model.currentBeat then
-        getCurrentColumn model currentBeat
-        |> playColumn
-    else
-        Task.ok {}
-
-playColumn : List Cell -> Task {} []
-playColumn = \column ->
-    List.map2 sounds column \x, y ->
-        (x, y)
-    |> Task.loop \state ->
-        when state is
-            [(sound, cell), .. as rest] ->
-                task = if cell.enabled then sound else Task.ok {}
-                {} <- task |> Task.await
-                Task.ok (Step rest)
-
-            [] -> Task.ok (Done {})
-
+getCellIndex : Mouse -> Result (Nat, Nat) [MouseNotInCell]
 getCellIndex = \mouse ->
     yIndex =
         List.range { start: At 0, end: At (rows - 1) }
@@ -206,7 +160,36 @@ draw = \model ->
     {} <- drawRoll model.roll |> Task.await
     {} <- drawBarMarkers |> Task.await
     {} <- drawIndicator model |> Task.await
-    drawFocused model
+    {} <- drawFocused model |> Task.await
+    drawText (getBpmStr model)
+
+
+getBpmStr : Model -> Str
+getBpmStr = \model -> 
+    # The screen is updated at 60hz. We use the frame count and the fact that it is 60hz to determine the tempo.
+    # Because we only have 60 calls to update per second, we are limited in the number of different tempos possible.
+    # 60hz = 60bps = 3600bpm
+    # For each beat (quarter note) we have 4 sixteenth notes, each of which require a distinct update. 
+    # The interval is the number of updates between each sixteenth note.
+    # 3600 / 4 = 900, so to compute the current bpm, we do the following:
+    bpm = Num.toF32 (900.0 / (Num.toF32 model.interval))
+    "$(floatToStr bpm) BPM"
+
+floatToStr : F32 -> Str
+floatToStr = \f -> 
+    intPart = Num.floor f
+    decPart = Num.floor (f * 100) - (intPart * 100)
+    decStr = Num.toStr decPart
+    if List.len (Str.toUtf8 decStr) == 1 then 
+        "$(Num.toStr intPart).$(decStr)0"
+    else
+        "$(Num.toStr intPart).$(decStr)"
+
+drawText : Str -> Task {} []
+drawText = \str ->
+    {} <- W4.setTextColors { fg: Color2, bg: Color1 } |> Task.await
+    {} <- W4.text str { x: 45, y: 10 } |> Task.await
+    W4.setTextColors { fg: Color1, bg: Color2 }
 
 drawBarMarkers =
     Task.loop 0 \bar ->
@@ -281,14 +264,28 @@ colors = {
     color4: 0xe30505,
 }
 
-drawColors = {
-    primary: Color1,
-    secondary: Color2,
-    tertiary: Color3,
-    quaternary: Color4,
-}
-
 # Sounds
+playSounds : Model, I32 -> Task {} []
+playSounds = \model, currentBeat ->
+    if currentBeat != model.currentBeat then
+        getCurrentColumn model currentBeat
+        |> playColumn
+    else
+        Task.ok {}
+
+playColumn : List Cell -> Task {} []
+playColumn = \column ->
+    List.map2 sounds column \x, y ->
+        (x, y)
+    |> Task.loop \state ->
+        when state is
+            [(sound, cell), .. as rest] ->
+                task = if cell.enabled then sound else Task.ok {}
+                {} <- task |> Task.await
+                Task.ok (Step rest)
+
+            [] -> Task.ok (Done {})
+
 sounds = [highTom, lowTom, hihat, snare, kick]
 
 kick : Task {} []
