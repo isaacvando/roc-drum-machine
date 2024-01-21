@@ -19,7 +19,7 @@ Model : {
     frame : U64,
     currentBeat : I32,
     mouseDown : Bool,
-    speedCoefficient : F64,
+    bpm : U64,
 }
 
 # As in piano roll
@@ -54,7 +54,7 @@ init =
         frame: 0,
         currentBeat: 0,
         mouseDown: Bool.false,
-        speedCoefficient: 8.0,
+        bpm: 120,
     }
 
     Task.ok model
@@ -84,7 +84,7 @@ update = \model ->
     currentBeat =
         model.frame
         |> Num.toF64
-        |> Num.div model.speedCoefficient
+        |> Num.div 8.0
         |> Num.floor
         |> Num.rem 16
         |> Num.toI32
@@ -92,29 +92,33 @@ update = \model ->
     {} <- playSounds model currentBeat |> Task.await
 
     gamepad <- W4.getGamepad Player1 |> Task.await
-    # {} <- W4.text (Inspect.toStr (Num.round model.speedCoefficient)) { x: 0, y: 0 } |> Task.await
+    {} <- drawText "$(Num.toStr model.bpm) BPM" |> Task.await
 
-    speedCoefficient =
-        changeBy = 0.25
-        val =
+    bpm =
+        if model.frame % 3 == 0 then
             if gamepad.left then
-                model.speedCoefficient + changeBy
+                model.bpm - 1
             else if gamepad.right then
-                model.speedCoefficient - changeBy
+                model.bpm + 1
             else
-                model.speedCoefficient
-
-        Num.max val 1
-        |> Num.min 100
+                model.bpm
+        else
+            model.bpm
 
     {
         roll,
         frame: Num.addWrap model.frame 1,
         currentBeat,
         mouseDown: mouse.left,
-        speedCoefficient,
+        bpm,
     }
     |> Task.ok
+
+drawText : Str -> Task {} []
+drawText = \str ->
+    {} <- W4.setTextColors { fg: Color2, bg: Color1 } |> Task.await
+    {} <- W4.text str { x: 55, y: 10 } |> Task.await
+    W4.setTextColors { fg: Color1, bg: Color2 }
 
 getCurrentColumn : Model, I32 -> List Cell
 getCurrentColumn = \model, index ->
