@@ -20,6 +20,8 @@ Model : {
     sinceLastBeat: U64,
     currentBeat : I32,
     mouseDown : Bool,
+    leftDown : Bool,
+    rightDown : Bool,
     interval : U64,
 }
 
@@ -56,6 +58,8 @@ init =
         sinceLastBeat: 0,
         currentBeat: 0,
         mouseDown: Bool.false,
+        leftDown: Bool.false,
+        rightDown: Bool.false,
         interval: 8,
     }
 
@@ -91,18 +95,17 @@ update = \model ->
     {} <- drawText"$(floatToStr bpm) BPM" |> Task.await
 
     interval =
-        if model.frame % 10 == 0 then
-            if gamepad.left then
+            if model.leftDown && model.rightDown then
+                model.interval
+            else if !gamepad.left && model.leftDown then           
                 model.interval
                 |> Num.addSaturated 1
-            else if gamepad.right then
+            else if !gamepad.right && model.rightDown then
                 model.interval
-                |> Num.subSaturated 1
+                |> Num.sub 1
                 |> Num.max 1
             else
                 model.interval
-        else
-            model.interval
 
     sinceLastBeat = 
         model.sinceLastBeat 
@@ -126,6 +129,8 @@ update = \model ->
         sinceLastBeat,
         currentBeat,
         mouseDown: mouse.left,
+        leftDown: gamepad.left,
+        rightDown: gamepad.right
     }
     |> Task.ok
 
