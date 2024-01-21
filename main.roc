@@ -343,11 +343,10 @@ cellLength = 10
 rows = 5
 
 # Utils
-unwrap : Result a x -> a
 unwrap = \x ->
     when x is
         Ok val -> val
-        Err _ -> crash "Encountered unexpected Err"
+        Err val -> crash "Encountered unexpected Err $(Inspect.toStr val)"
 
 taskRange = \n, f ->
     Task.loop 0 \index ->
