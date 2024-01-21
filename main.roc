@@ -90,6 +90,12 @@ update = \model ->
     
     gamepad <- W4.getGamepad Player1 |> Task.await
 
+    # The screen is updated at 60hz. We use the frame count and the fact that it is 60hz to determine the tempo.
+    # Because we only have 60 calls to update per second, we are limited in the number of different tempos possible.
+    # 60hz = 60bps = 3600bpm
+    # For each beat (quarter note) we have 4 sixteenth notes, each of which require a distinct update. 
+    # The interval is the number of updates between each sixteenth note.
+    # 3600 / 4 = 900, so to compute the current bpm, we do the following:
     bpm = Num.toF32 (900.0 / (Num.toF32 model.interval))
 
     {} <- drawText"$(floatToStr bpm) BPM" |> Task.await
