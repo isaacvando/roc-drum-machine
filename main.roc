@@ -8,7 +8,6 @@ app "main"
     ]
     provides [main, Model] to w4
 
-
 # Aliases
 Program : {
     init : Task Model [],
@@ -17,14 +16,14 @@ Program : {
 
 Model : {
     roll : Roll,
-    frame : U64,
-    focused : Result (Nat,Nat) [MouseNotInCell],
-    sinceLastBeat: U64,
-    currentBeat : I32,
+    focused : Result (Nat, Nat) [MouseNotInCell],
+    frame : U16,
+    sinceLastBeat : U16,
+    interval : U16,
+    currentBeat : U8,
     mouseDown : Bool,
     leftDown : Bool,
     rightDown : Bool,
-    interval : U64,
 }
 
 # As in piano roll
@@ -36,6 +35,7 @@ Cell : {
     enabled : Bool,
 }
 
+# Logic
 main : Program
 main = { init, update }
 
@@ -43,7 +43,7 @@ init : Task Model []
 init =
     {} <- W4.setPalette colors |> Task.await
 
-    emptyRow = List.repeat { enabled: Bool.false, } 16
+    emptyRow = List.repeat { enabled: Bool.false } 16
 
     Task.ok {
         roll: List.repeat emptyRow rows,
@@ -72,9 +72,8 @@ update = \model ->
 
     Task.ok newModel
 
-
 step : Model, Mouse, Gamepad -> Model
-step = \model, mouse, gamepad -> 
+step = \model, mouse, gamepad ->
     currentIndex = getCellIndex mouse
 
     roll =
@@ -87,29 +86,29 @@ step = \model, mouse, gamepad ->
             _ -> model.roll
 
     interval =
-            if model.leftDown && model.rightDown then
-                model.interval
-            else if !gamepad.left && model.leftDown then           
-                model.interval
-                |> Num.addSaturated 1
-            else if !gamepad.right && model.rightDown then
-                model.interval
-                |> Num.sub 1
-                |> Num.max 1
-            else
-                model.interval
+        if model.leftDown && model.rightDown then
+            model.interval
+        else if !gamepad.left && model.leftDown then
+            model.interval
+            |> Num.addSaturated 1
+        else if !gamepad.right && model.rightDown then
+            model.interval
+            |> Num.sub 1
+            |> Num.max 1
+        else
+            model.interval
 
-    sinceLastBeat = 
-        model.sinceLastBeat 
+    sinceLastBeat =
+        model.sinceLastBeat
         |> Num.add 1
         |> Num.rem interval
 
-    currentBeat = 
+    currentBeat =
         if model.sinceLastBeat == 0 then
             model.currentBeat
             |> Num.add 1
             |> Num.rem 16
-        else 
+        else
             model.currentBeat
 
     {
@@ -121,14 +120,14 @@ step = \model, mouse, gamepad ->
         currentBeat,
         mouseDown: mouse.left,
         leftDown: gamepad.left,
-        rightDown: gamepad.right
+        rightDown: gamepad.right,
     }
 
-getCurrentColumn : Model, I32 -> List Cell
+getCurrentColumn : Model, Nat -> List Cell
 getCurrentColumn = \model, index ->
     model.roll
     |> List.map \row ->
-        List.get row (Num.toNat index) |> unwrap
+        List.get row index |> unwrap
 
 getCellIndex : Mouse -> Result (Nat, Nat) [MouseNotInCell]
 getCellIndex = \mouse ->
@@ -163,24 +162,23 @@ draw = \model ->
     {} <- drawFocused model |> Task.await
     drawText (getBpmStr model)
 
-
 getBpmStr : Model -> Str
-getBpmStr = \model -> 
+getBpmStr = \model ->
     # The screen is updated at 60hz. We use the frame count and the fact that it is 60hz to determine the tempo.
     # Because we only have 60 calls to update per second, we are limited in the number of different tempos possible.
     # 60hz = 60bps = 3600bpm
-    # For each beat (quarter note) we have 4 sixteenth notes, each of which require a distinct update. 
+    # For each beat (quarter note) we have 4 sixteenth notes, each of which require a distinct update.
     # The interval is the number of updates between each sixteenth note.
     # 3600 / 4 = 900, so to compute the current bpm, we do the following:
-    bpm = Num.toF32 (900.0 / (Num.toF32 model.interval))
+    bpm = 900.0 / (Num.toF32 model.interval)
     "$(floatToStr bpm) BPM"
 
 floatToStr : F32 -> Str
-floatToStr = \f -> 
+floatToStr = \f ->
     intPart = Num.floor f
     decPart = Num.floor (f * 100) - (intPart * 100)
     decStr = Num.toStr decPart
-    if List.len (Str.toUtf8 decStr) == 1 then 
+    if List.len (Str.toUtf8 decStr) == 1 then
         "$(Num.toStr intPart).$(decStr)0"
     else
         "$(Num.toStr intPart).$(decStr)"
@@ -204,7 +202,7 @@ drawBarMarkers =
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
     # Assuming we maintain 60 FPS, this means 120 BPM
-    x = model.currentBeat * cellLength
+    x = model.currentBeat * cellLength |> Num.toI32
     len = 4
     palette = { border: Color4, fill: Color4 }
     drawShapeWithColors (W4.vline { x, y: offset - len, len }) palette
@@ -240,12 +238,12 @@ drawCell = \cell, x, y ->
         W4.rect { x, y, width: cellLength, height: cellLength }
 
 drawFocused : Model -> Task {} []
-drawFocused = \model -> 
+drawFocused = \model ->
     when model.focused is
-        Ok (x,y) -> 
-            drawCell {enabled: Bool.true} (Num.toI32 x * cellLength) (Num.toI32 y * cellLength + offset)
-        _ -> Task.ok {}
+        Ok (x, y) ->
+            drawCell { enabled: Bool.true } (Num.toI32 x * cellLength) (Num.toI32 y * cellLength + offset)
 
+        _ -> Task.ok {}
 
 drawShapeWithColors : Task {} [], { border : Palette, fill : Palette } -> Task {} []
 drawShapeWithColors = \drawShape, borderAndFill ->
@@ -265,10 +263,10 @@ colors = {
 }
 
 # Sounds
-playSounds : Model, I32 -> Task {} []
+playSounds : Model, U8 -> Task {} []
 playSounds = \model, currentBeat ->
     if currentBeat != model.currentBeat then
-        getCurrentColumn model currentBeat
+        getCurrentColumn model (Num.toNat currentBeat)
         |> playColumn
     else
         Task.ok {}
@@ -359,9 +357,9 @@ space = 10
 cellLength = 10
 rows = 5
 
-
 # Utils
+unwrap : Result a x -> a
 unwrap = \x ->
     when x is
         Ok val -> val
-        Err _ -> crash "bad unwrap"
+        Err _ -> crash "Encountered unexpected Err"
