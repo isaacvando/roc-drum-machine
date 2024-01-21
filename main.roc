@@ -17,9 +17,10 @@ Program : {
 Model : {
     roll : Roll,
     frame : U64,
+    sinceLastBeat: U64,
     currentBeat : I32,
     mouseDown : Bool,
-    bpm : U64,
+    interval : U64,
 }
 
 # As in piano roll
@@ -52,9 +53,10 @@ init =
     model = {
         roll: List.repeat emptyRow rows,
         frame: 0,
+        sinceLastBeat: 0,
         currentBeat: 0,
         mouseDown: Bool.false,
-        bpm: 120,
+        interval: 8,
     }
 
     Task.ok model
@@ -81,36 +83,45 @@ update = \model ->
 
             _ -> model.roll
 
-    currentBeat =
-        model.frame
-        |> Num.toF64
-        |> Num.div 8.0
-        |> Num.floor
-        |> Num.rem 16
-        |> Num.toI32
+    
+    gamepad <- W4.getGamepad Player1 |> Task.await
+
+    interval =
+        if model.frame % 10 == 0 then
+            if gamepad.left then
+                model.interval
+                |> Num.addSaturated 1
+            else if gamepad.right then
+                model.interval
+                |> Num.subSaturated 1
+                |> Num.min 1
+            else
+                model.interval
+        else
+            model.interval
+
+    sinceLastBeat = 
+        model.sinceLastBeat 
+        |> Num.add 1
+        |> Num.rem interval
+
+    currentBeat = 
+        if model.sinceLastBeat == 0 then
+            model.currentBeat
+            |> Num.add 1
+            |> Num.rem 16
+        else 
+            model.currentBeat
 
     {} <- playSounds model currentBeat |> Task.await
-
-    gamepad <- W4.getGamepad Player1 |> Task.await
-    {} <- drawText "$(Num.toStr model.bpm) BPM" |> Task.await
-
-    bpm =
-        if model.frame % 3 == 0 then
-            if gamepad.left then
-                model.bpm - 1
-            else if gamepad.right then
-                model.bpm + 1
-            else
-                model.bpm
-        else
-            model.bpm
 
     {
         roll,
         frame: Num.addWrap model.frame 1,
+        interval,
+        sinceLastBeat,
         currentBeat,
         mouseDown: mouse.left,
-        bpm,
     }
     |> Task.ok
 
