@@ -5,7 +5,6 @@ app "main"
     imports [
         w4.Task.{ Task },
         w4.W4.{ Palette },
-        # w4.Sprite.{ Sprite },
     ]
     provides [main, Model] to w4
 
@@ -33,7 +32,6 @@ Row : List Cell
 
 Cell : {
     enabled : Bool,
-    lastClicked : U64,
 }
 
 main : Program
@@ -44,12 +42,7 @@ init =
     {} <- W4.setPalette colors |> Task.await
     {} <- W4.setDrawColors drawColors |> Task.await
 
-    emptyRow = List.repeat
-        {
-            enabled: Bool.false,
-            lastClicked: 0,
-        }
-        16
+    emptyRow = List.repeat { enabled: Bool.false, } 16
 
     model = {
         roll: List.repeat emptyRow rows,
@@ -267,7 +260,7 @@ drawFocused : Model -> Task {} []
 drawFocused = \model -> 
     when model.focused is
         Ok (x,y) -> 
-            drawCell {enabled: Bool.true, lastClicked: 0} (Num.toI32 x * cellLength) (Num.toI32 y * cellLength + offset)
+            drawCell {enabled: Bool.true} (Num.toI32 x * cellLength) (Num.toI32 y * cellLength + offset)
         _ -> Task.ok {}
 
 
@@ -368,6 +361,7 @@ offset = 55
 space = 10
 cellLength = 10
 rows = 5
+
 
 # Utils
 unwrap = \x ->
