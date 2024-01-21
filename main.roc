@@ -189,15 +189,12 @@ drawText = \str ->
     {} <- W4.text str { x: 45, y: 10 } |> Task.await
     W4.setTextColors { fg: Color1, bg: Color2 }
 
+drawBarMarkers : Task {} []
 drawBarMarkers =
-    Task.loop 0 \bar ->
-        if bar == 4 then
-            Done {} |> Task.ok
-        else
-            x = bar * cellLength * 4
-            shape = W4.vline { x, y: offset - 2, len: 2 }
-            {} <- drawShapeWithColors shape { border: Color4, fill: Color4 } |> Task.await
-            Step (bar + 1) |> Task.ok
+    taskRange 4 \bar ->
+        x = bar * cellLength * 4
+        shape = W4.vline { x, y: offset - 2, len: 2 }
+        drawShapeWithColors shape { border: Color4, fill: Color4 }
 
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
@@ -209,25 +206,17 @@ drawIndicator = \model ->
 
 drawRoll : Roll -> Task {} []
 drawRoll = \roll ->
-    Task.loop 0 \n ->
-        if n == rows then
-            Done {} |> Task.ok
-        else
-            row = List.get roll n |> unwrap
-            y = offset + n * space |> Num.toI32
-            {} <- drawRow row y |> Task.await
-            Step (n + 1) |> Task.ok
+    taskRange rows \n ->
+        row = List.get roll n |> unwrap
+        y = offset + n * space |> Num.toI32
+        drawRow row y
 
 drawRow : Row, I32 -> Task {} []
 drawRow = \row, y ->
-    Task.loop 0 \n ->
-        if n == 16 then
-            Done {} |> Task.ok
-        else
-            cellState = List.get row n |> unwrap
-            x = cellLength * n |> Num.toI32
-            {} <- drawCell cellState x y |> Task.await
-            Step (n + 1) |> Task.ok
+    taskRange 16 \n ->
+        cellState = List.get row n |> unwrap
+        x = cellLength * n |> Num.toI32
+        drawCell cellState x y
 
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
@@ -273,16 +262,12 @@ playSounds = \model, currentBeat ->
 
 playColumn : List Cell -> Task {} []
 playColumn = \column ->
-    List.map2 sounds column \x, y ->
-        (x, y)
-    |> Task.loop \state ->
-        when state is
-            [(sound, cell), .. as rest] ->
-                task = if cell.enabled then sound else Task.ok {}
-                {} <- task |> Task.await
-                Task.ok (Step rest)
-
-            [] -> Task.ok (Done {})
+    taskRange rows \n ->
+        cell = List.get column n |> unwrap
+        if cell.enabled then
+            List.get sounds n |> unwrap
+        else
+            Task.ok {}
 
 sounds = [highTom, lowTom, hihat, snare, kick]
 
@@ -363,3 +348,11 @@ unwrap = \x ->
     when x is
         Ok val -> val
         Err _ -> crash "Encountered unexpected Err"
+
+taskRange = \n, f ->
+    Task.loop 0 \index ->
+        if index == n then
+            Done {} |> Task.ok
+        else
+            {} <- f index |> Task.await
+            Step (index + 1) |> Task.ok
