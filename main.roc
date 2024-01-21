@@ -84,8 +84,8 @@ update = \model ->
     currentBeat =
         model.frame
         |> Num.toF64
-        |> Num.div (Num.max model.speedCoefficient 1)
-        |> Num.round
+        |> Num.div model.speedCoefficient
+        |> Num.floor
         |> Num.rem 16
         |> Num.toI32
 
@@ -105,6 +105,7 @@ update = \model ->
                 model.speedCoefficient
 
         Num.max val 1
+        |> Num.min 100
 
     {
         roll,
@@ -195,9 +196,9 @@ drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
     # Assuming we maintain 60 FPS, this means 120 BPM
     x = model.currentBeat * cellLength
-    y = offset + rows * space
-    drawShape = W4.oval { height: cellLength, width: cellLength, x, y }
-    drawShapeWithColors drawShape { border: Color4, fill: Color4 }
+    len = 4
+    palette = { border: Color4, fill: Color4 }
+    drawShapeWithColors (W4.vline { x, y: offset - len, len }) palette
 
 drawRoll : Roll -> Task {} []
 drawRoll = \roll ->
