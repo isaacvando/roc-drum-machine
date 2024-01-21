@@ -86,6 +86,11 @@ update = \model ->
     
     gamepad <- W4.getGamepad Player1 |> Task.await
 
+    # Approximate BPM
+    bpm = 900 // model.interval
+
+    {} <- drawText"$(Num.toStr bpm) BPM" |> Task.await
+
     interval =
         if model.frame % 10 == 0 then
             if gamepad.left then
@@ -94,7 +99,7 @@ update = \model ->
             else if gamepad.right then
                 model.interval
                 |> Num.subSaturated 1
-                |> Num.min 1
+                |> Num.max 1
             else
                 model.interval
         else
