@@ -17,6 +17,7 @@ Program : {
 Model : {
     roll : Roll,
     frame : U64,
+    focused : Result (Nat,Nat) [MouseNotInCell],
     sinceLastBeat: U64,
     currentBeat : I32,
     mouseDown : Bool,
@@ -32,7 +33,6 @@ Row : List Cell
 
 Cell : {
     enabled : Bool,
-    focused : Bool,
     lastClicked : U64,
 }
 
@@ -47,13 +47,13 @@ init =
     emptyRow = List.repeat
         {
             enabled: Bool.false,
-            focused: Bool.false,
             lastClicked: 0,
         }
         16
 
     model = {
         roll: List.repeat emptyRow rows,
+        focused: Err MouseNotInCell,
         frame: 0,
         sinceLastBeat: 0,
         currentBeat: 0,
@@ -67,28 +67,25 @@ init =
 
 update : Model -> Task Model []
 update = \model ->
+    # Get input
     mouse <- W4.getMouse |> Task.await
-    {} <- draw model |> Task.await
+    gamepad <- W4.getGamepad Player1 |> Task.await
 
+
+    # Compute new model
     # When the mouse is released we register a click and update the roll
     didClick = !mouse.left && model.mouseDown
 
+    currentIndex = getCellIndex mouse
     roll =
-        when getCellIndex mouse is
+        when currentIndex is
             Ok index if didClick ->
                 updateCell model.roll index \c ->
                     { c & enabled: !c.enabled }
 
-            Ok index ->
-                model.roll
-                |> clearFocused
-                |> updateCell index \c ->
-                    { c & focused: !c.focused }
-
             _ -> model.roll
 
     
-    gamepad <- W4.getGamepad Player1 |> Task.await
 
     # The screen is updated at 60hz. We use the frame count and the fact that it is 60hz to determine the tempo.
     # Because we only have 60 calls to update per second, we are limited in the number of different tempos possible.
@@ -126,10 +123,14 @@ update = \model ->
         else 
             model.currentBeat
 
+    # Update game
     {} <- playSounds model currentBeat |> Task.await
+    {} <- draw model |> Task.await
 
+    # Return new model
     {
         roll,
+        focused: currentIndex,
         frame: Num.addWrap model.frame 1,
         interval,
         sinceLastBeat,
@@ -183,15 +184,6 @@ playColumn = \column ->
 
             [] -> Task.ok (Done {})
 
-# This is a temporary solution. Focused should be a single value on the model instead.
-clearFocused : Roll -> Roll
-clearFocused = \roll ->
-    roll
-    |> List.map \row ->
-        row
-        |> List.map \cell ->
-            { cell & focused: Bool.false }
-
 getCellIndex = \mouse ->
     yIndex =
         List.range { start: At 0, end: At (rows - 1) }
@@ -220,7 +212,8 @@ draw : Model -> Task {} []
 draw = \model ->
     {} <- drawRoll model.roll |> Task.await
     {} <- drawBarMarkers |> Task.await
-    drawIndicator model
+    {} <- drawIndicator model |> Task.await
+    drawFocused model
 
 drawBarMarkers =
     Task.loop 0 \bar ->
@@ -264,11 +257,19 @@ drawRow = \row, y ->
 
 drawCell : Cell, I32, I32 -> Task {} []
 drawCell = \cell, x, y ->
-    if cell.enabled || cell.focused then
+    if cell.enabled then
         drawShape = W4.rect { x, y, width: cellLength, height: cellLength }
         drawShapeWithColors drawShape { border: Color2, fill: Color3 }
     else
         W4.rect { x, y, width: cellLength, height: cellLength }
+
+drawFocused : Model -> Task {} []
+drawFocused = \model -> 
+    when model.focused is
+        Ok (x,y) -> 
+            drawCell {enabled: Bool.true, lastClicked: 0} (Num.toI32 x * cellLength) (Num.toI32 y * cellLength + offset)
+        _ -> Task.ok {}
+
 
 drawShapeWithColors : Task {} [], { border : Palette, fill : Palette } -> Task {} []
 drawShapeWithColors = \drawShape, borderAndFill ->
