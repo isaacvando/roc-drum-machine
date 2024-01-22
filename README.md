@@ -8,8 +8,8 @@ zig build run
 ```
 
 The instruments are (from top to bottom):
-1. High tom
-1. Low tom
+1. Boop
+1. Beep
 1. HiHat
 1. Snare
 1. Kick

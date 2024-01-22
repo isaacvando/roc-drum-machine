@@ -269,7 +269,7 @@ playColumn = \column ->
         else
             Task.ok {}
 
-sounds = [highTom, lowTom, hihat, snare, kick]
+sounds = [boop, beep, hihat, snare, kick]
 
 kick : Task {} []
 kick = W4.tone {
@@ -299,32 +299,32 @@ snare = W4.tone {
 
 hihat : Task {} []
 hihat = W4.tone {
-    startFreq: 680,
-    endFreq: 675,
+    startFreq: 710,
+    endFreq: 695,
     attackTime: 0,
-    decayTime: 6,
-    sustainTime: 1,
+    decayTime: 2,
+    sustainTime: 0,
     releaseTime: 0,
     peakVolume: 60,
     volume: 60,
     channel: Pulse1 Eighth,
 }
 
-lowTom : Task {} []
-lowTom = W4.tone {
+beep : Task {} []
+beep = W4.tone {
     startFreq: 400,
-    endFreq: 200,
+    endFreq: 800,
     attackTime: 2,
-    decayTime: 22,
-    sustainTime: 14,
-    releaseTime: 8,
+    decayTime: 3,
+    sustainTime: 0,
+    releaseTime: 0,
     peakVolume: 68,
     volume: 58,
     channel: Pulse2 Eighth,
 }
 
-highTom : Task {} []
-highTom = W4.tone {
+boop : Task {} []
+boop = W4.tone {
     startFreq: 600,
     endFreq: 400,
     attackTime: 2,
