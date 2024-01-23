@@ -62,15 +62,11 @@ update = \model ->
     # Get input
     mouse <- W4.getMouse |> Task.await
     gamepad <- W4.getGamepad Player1 |> Task.await
-
-    # Get new model
-    newModel = step model mouse gamepad
-
     # Update game
-    {} <- playSounds model newModel.currentBeat |> Task.await
+    {} <- playSounds model |> Task.await
     {} <- draw model |> Task.await
 
-    Task.ok newModel
+    Task.ok (step model mouse gamepad)
 
 step : Model, Mouse, Gamepad -> Model
 step = \model, mouse, gamepad ->
@@ -198,8 +194,7 @@ drawBarMarkers =
 
 drawIndicator : Model -> Task {} []
 drawIndicator = \model ->
-    # Assuming we maintain 60 FPS, this means 120 BPM
-    x = model.currentBeat * cellLength |> Num.toI32
+    x = (Num.toI32 model.currentBeat) * cellLength
     len = 4
     palette = { border: Color4, fill: Color4 }
     drawShapeWithColors (W4.vline { x, y: offset - len, len }) palette
@@ -252,10 +247,10 @@ colors = {
 }
 
 # Sounds
-playSounds : Model, U8 -> Task {} []
-playSounds = \model, currentBeat ->
-    if currentBeat != model.currentBeat then
-        getCurrentColumn model (Num.toNat currentBeat)
+playSounds : Model -> Task {} []
+playSounds = \model ->
+    if model.sinceLastBeat == 0 then
+        getCurrentColumn model (Num.toNat model.currentBeat)
         |> playColumn
     else
         Task.ok {}
