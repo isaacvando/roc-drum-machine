@@ -16,7 +16,7 @@ Program : {
 
 Model : {
     roll : Roll,
-    focused : Result (Nat, Nat) [MouseNotInCell],
+    focused : Result (U64, U64) [MouseNotInCell],
     frame : U16,
     sinceLastBeat : U16,
     interval : U16,
@@ -119,13 +119,13 @@ step = \model, mouse, gamepad ->
         rightDown: gamepad.right,
     }
 
-getCurrentColumn : Model, Nat -> List Cell
+getCurrentColumn : Model, U64 -> List Cell
 getCurrentColumn = \model, index ->
     model.roll
     |> List.map \row ->
         List.get row index |> unwrap
 
-getCellIndex : Mouse -> Result (Nat, Nat) [MouseNotInCell]
+getCellIndex : Mouse -> Result (U64, U64) [MouseNotInCell]
 getCellIndex = \mouse ->
     yIndex =
         List.range { start: At 0, end: At (rows - 1) }
@@ -143,7 +143,7 @@ getCellIndex = \mouse ->
         (Ok x, Ok y) -> Ok (x, y)
         _ -> Err MouseNotInCell
 
-updateCell : Roll, (Nat, Nat), (Cell -> Cell) -> List Row
+updateCell : Roll, (U64, U64), (Cell -> Cell) -> List Row
 updateCell = \roll, (x, y), f ->
     row <- List.update roll y
     cell <- List.update row x
@@ -250,7 +250,7 @@ colors = {
 playSounds : Model -> Task {} []
 playSounds = \model ->
     if model.sinceLastBeat == 0 then
-        getCurrentColumn model (Num.toNat model.currentBeat)
+        getCurrentColumn model (Num.toU64 model.currentBeat)
         |> playColumn
     else
         Task.ok {}
